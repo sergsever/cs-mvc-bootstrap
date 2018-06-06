@@ -1,0 +1,407 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>from-data</title>
+    <meta charset="utf-8">
+    
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
+    <link href="~/Content/Site.css" rel="stylesheet" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.10.2/jquery.js"></script>
+
+    <script src="~/Scripts/jquery-3.3.1.js" type="text/javascript"></script>
+    <script src="~/Scripts/bootstrap.js"></script>
+    <script type="text/javascript" src="~/Scripts/DataTables/jquery.dataTables.js"></script>
+    <script src="https://cdn.datatables.net/1.10.15/js/jquery.dataTables.min.js"></script>
+    <script src="~/Scripts/select2.js" type="text/javascript"></script>
+
+    <script src="https://cdn.datatables.net/1.10.15/js/dataTables.bootstrap4.min.js "></script>
+    <script src="Scripts/bootstrap-table.js"></script>
+    <script src="~/Scripts/angular.min.js"></script>
+    <script>
+        var global = this;
+        var selectedUserID = 0;
+        var selectedTaskID = 0;
+        var tasksTable = undefined;
+        var selectedCommentID = 0;
+        var selectedCommentText = '';
+
+        var selectedCreatorID = 0;
+        var selectedExecutorID = 0;
+
+        var commentChange = function () {
+            window.console.log('comment change:');
+        }
+
+        var setCreator = function (id) {
+            window.console.log('set creator:' + id);
+            selectedCreatorID = parseInt(id);
+        }
+
+        var setExecutor = function (id) {
+            window.console.log('set executor:' + id);
+            selectedExecutorID = parseInt(id);
+        }
+
+        var setSelectedUser = function (id) {
+            var list = document.getElementById('users');
+            var userID = parseInt(id);
+            window.console.log('set selected user:' + userID);
+            selectedUserID = userID;
+
+        }
+
+        var setCreator = function (id) {
+            var creatorID = parseInt(id);
+            global.selectedCreatorID = creatorID;
+        }
+
+        var setExecutor = function (id) {
+            var executorID = parseInt(id);
+            global.selectedExecutorID = executorID;
+        }
+
+        var fillTasks = function () {
+            window.console.log('fill tasks:');
+            var select = $('#users').select2(
+                {
+                    placeholder: '...выберете пользователя',
+                    minimumInputLength: 0,
+                    allowClear: true,
+                    "ajax": {
+                        width: 'resolve',
+                        url: 'http://localhost:50400/Tasks/GetUsers',
+                        type: 'GET',
+                        dataType: 'json',
+                        quietMillis: 50,
+                        data: function (params) {
+                            window.console.log('data:' + params);
+                            return {
+                                q: params.term
+                            };
+                        },
+                        processResults: function (data) {
+                            window.console.log('processResults:' + data.length);
+                            return { results: data.results };
+                        },
+                        formatResult: function (item) {
+                            window.console.log('format results:' + item);
+                            return item.text;
+                        }
+                    }
+                }).on('change', function (e) { console.log('select2:change:' + this.text); setSelectedUser(this.value) });
+            window.console.log('start table:')
+            if (tasksTable === undefined) {
+                tasksTable = $('#tasks').dataTable({
+                    "ajax": {
+                        "url": "/Tasks/GetTasks",
+                        "type": "GET",
+                        "datatype": "json"
+                    },
+                    "columnDefs":
+                    [{ targets: [0], visible: true },
+                    { targets: 1, visible: true },
+                    { targets: 2, visible: true },
+                    { targets: 3, visible: true },
+                    { targets: 4, visible: true },
+                    { targets: 5, visible: true }
+                    ],
+                    "aoColumns": [
+                        {
+                            "data": "TaskID", "name": "TaskID"
+                        },
+                        {
+                            "data": "CreateDate", "type": 'datetime', "format": 'M/D/YYYY',
+                            "render": function (data) {
+                                var res = data.replace(/\//g, '');
+                                res = res.replace(/Date\(/g, '');
+                                res = res.replace(')', '');
+                                var mils = parseInt(res)
+                                var dat = new Date(mils);
+                                return dat.toLocaleDateString("ru-ru");
+                            },
+                            "name": "CreateDate"
+                        },
+                        { "data": "Creator.LastName", "name": "Creator.LastName" },
+                        { "data": "Executor.LastName", "name": "Executor.LastName" },
+                        { "data": "Title", "name": "Title" },
+                        { "data": "Description", "name": "Description" },
+                        {
+                            "data": null,
+                            "mRender": function (data, type, row) {
+                                var link = '<a href="#" onclick="editTask(' + data.TaskID + ');">Edit</a> /' + '<a href="#" onclick="deleteTask(' + data.TaskID + ');">Delete</a>';
+                                return link;
+
+                            }
+                        }
+                    ]
+                });
+            } else {
+                tasksTable.api().ajax.reload();
+            }/* if undefined*/
+
+                /*dataTable*/
+            var pageSize = 10;
+        }
+        document.addEventListener("DOMContentLoaded", fillTasks);
+
+        var createTask = function () {
+            window.console.log('create task:');
+            fillFormSelects(false);
+            var userID = global.selectedUserID;
+            global.selectedTaskID = 0;
+            $('#TaskDiv').modal('show');
+
+                
+        }
+
+        var fillComments = function (id) {
+            var taskID = id;
+            var comments = [];
+            var url = '/Tasks/GetComments?taskID=' + taskID;
+            $.ajax({
+                url: url,
+                method: 'GET',
+                dataType: 'json',
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('get comments resp:' + resp.length);
+                    comments = resp;
+                    $.each(comments, function (index, value) {
+                        window.console.log('comments each:' + value)
+                        var row = '<li>' + value.User.LastName + ':' + '<input type="text"' + 'value="' + value.CommentText + '" ' + 'id="c' + value.TaskCommentID + '"/>' +  '<a href="#" onclick="saveComment(' + value.TaskCommentID + ');">Сохранить</a> /' + '<a href="#"' +
+                            'onclick = "deleteComment(' + value.TaskCommentID + ');"> Удалить</a>' +  '</li>';
+                        $('#comments').append(row);
+                    })
+                }
+            })
+        }
+
+        var saveComment = function (id) {
+            window.console.log('save comment run');
+            var commentID = id;
+            var textid = 'c' + commentID;
+            var editor = document.getElementById(textid);
+//            window.console.log('save comment:editor:' + editor);
+            var commentText = editor.value;
+            window.console.log('save comment:' + commentText);
+            var params = { commentID: commentID, comment: commentText }
+            var sparams = JSON.stringify(params);
+            $.ajax({
+                url: '/Tasks/SaveComment',
+                method: 'POST',
+                dataType: 'json',
+                data: sparams,
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('save comment resp:' + resp);
+                }
+            })
+        }
+
+        var newComment = function () {
+            var taskID = global.selectedTaskID;
+            var userID = global.selectedExecutorID;
+            var text = $('#Comment').val();
+            window.console.log('new comment:' + text);
+            var params = { taskID: taskID, userID: userID, comment: text };
+            var sparams = JSON.stringify(params);
+            $.ajax({
+                url: '/Tasks/AddComment',
+                method: 'POST',
+                dataType: 'json',
+                data: sparams,
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('new comment resp:' + resp);
+                }
+            })
+        }
+
+        var fillFormSelects = function (isEdit, task) {
+            var creator = $('#Creator').select2(
+                {
+                    placeholder: isEdit? { id: task.Creator.UserID, text: task.Creator.LastName + ' ' + task.Creator.FirstName + ' ' + task.Creator.MiddleName } : 'создатель',
+                    minimumInputLength: 0,
+                    allowClear: true,
+                    width: '200px',
+                    "ajax": {
+                        url: 'http://localhost:50400/Tasks/GetUsers',
+                        type: 'GET',
+                        dataType: 'json',
+                        delay: 0,
+                        data: function (params) {
+                            window.console.log('data:' + params);
+                            return {
+                                q: params.term
+                            };
+                        },
+                        processResults: function (data) {
+                            window.console.log('processResults:' + data.results.length);
+                            return { results: data.results };
+                        },
+                        formatResult: function (item) {
+                            window.console.log('format results:' + item);
+                            return item.text;
+                        }
+                    }
+                }).on('change', function (e) { console.log('creator:change:' + this.value); setCreator(this.value) });
+            var executor = $('#Executor').select2(
+                {
+                    placeholder: isEdit? { id: task.Executor.UserID, text: task.Executor.LastName + ' ' + task.Executor.FirstName + ' ' + task.Executor.MiddleName } : 'исполнитель',
+                    minimumInputLength: 0,
+                    allowClear: true,
+                    width: '200px',
+                    "ajax": {
+                        url: 'http://localhost:50400/Tasks/GetUsers',
+                        type: 'GET',
+                        dataType: 'json',
+                        data: function (params) {
+                            window.console.log('data:' + params);
+                            return {
+                                q: params.term
+                            };
+                        },
+                        processResults: function (data) {
+                            window.console.log('processResults:' + data.results.length);
+                            return { results: data.results };
+                        },
+                        formatResult: function (item) {
+                            window.console.log('format results:' + item);
+                            return item.text;
+                        }
+                    }
+                }).on('change', function (e) { console.log('executor:change:' + this.value); setExecutor(this.value) });
+        } 
+
+        var editTask = function (id) {
+            window.console.log('edit task:' + id);
+            var taskID = id;
+            global.selectedTaskID = taskID;
+            var url = '/Tasks/GetTask?taskID=' + taskID;
+            $.ajax({
+                url: url,
+                method: 'GET',
+                dataType: 'json',
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('edit task resp:' + resp.TaskID);
+                    
+                     /*fill selects*/
+                    var task = resp;
+
+                    $('#Title').val(task.Title);
+                    $('#Description').val(task.Description);
+                    fillFormSelects(true, task);
+
+                    
+                    $('#TaskDiv').bind('show', function () {
+                        $('#Title').val(task.Title);
+                        $('#Description').val(task.Description);
+                    });
+                    $('#TaskDiv').modal('show');
+                    fillComments(taskID);
+                    
+
+                }
+
+            })
+        }
+
+        var saveTask = function () {
+            var taskID = global.selectedTaskID;
+            var title = $('#Title').val();
+            var description = $('#Description').val();
+            var creatorID = global.selectedCreatorID;
+            var executorID = global.selectedExecutorID;
+            var params = { taskID: taskID, title: title, description: description, creatorID: creatorID, executorID: executorID };
+            var sparams = JSON.stringify(params);
+            window.console.log('save task: params:' + sparams);
+            $.ajax({
+                url: '/Tasks/SaveTask',
+                method: 'POST',
+                dataType: 'json',
+                data: sparams,
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('save task resp:' + resp);
+                    fillTasks();
+                    $('#TaskDiv').modal('hide');
+
+                }
+            })
+
+
+        }
+
+        var deleteTask = function (id) {
+            var taskID = id;
+            window.console.log('delete task:' + taskID);
+            var url = '/Tasks/DeleteTask?taskID=' + taskID;
+            $.ajax({
+                url: url,
+                method: 'delete',
+                dataType: 'json',
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('delete task resp:' + resp);
+                    fillTasks();
+                }
+            })
+
+        }
+
+
+    </script>
+
+</head>
+<body>
+    <div widtch="50%"><button onclick="createTask();">Создать новую задачу</button><select id="users" class="form-control"></select></div>
+
+    <div id="TaskDiv" class="modal fade" role="dialog" data-toggle="modal" aria-labelledby="Задача">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">x</button>
+                    <h5 class="modal-title">Задача</h5>
+                </div><!--header-->
+                <div class="modal-body">
+                    <div class="form-group">
+                        <form id="TaskForm" class="form-horizontal" name="Task">
+                            <div class="form-group row"><label class="control-label" for="Title">Наименование:</label><input type="text" class="form-control-lg" id="Title" name="Title" required/></div>
+                            <div class="form-group row"><label class="control-label" for="Description">Описание:</label><input type="text" class="form-control-lg" id="Description" name="Sescription" placeholder="Описание" /></div>
+                            <div class="form-group row"><label class="control-label" for="Creator">Создатель:</label><select id="Creator" form="TaskForm"  class="form-control"></select></div>
+                            <div class="form-group row"><label class="control-label" for="Executor">Исполнитель:</label><select id="Executor" form="TaskForm" class="form-control"></select></div><br/>
+                            </form>
+                        <hr />
+                    </div><!--form-group-->
+                    <div class="comments">
+                        <input type="text" id="Comment" />
+                        <button onclick="newComment();">Сохранить комментарий от выбранного<br /> в форме исполнителя</button>
+                        <h5>Комментарии к задаче</h5>
+                        <ul id="comments">
+
+                        </ul>
+                    </div>
+                    <div class="form-group row"><button type="submit" onclick="saveTask();">Сохранить</button></div>
+
+                </div><!--body-->
+            </div><!--content-->
+        </div><!--dialog-->
+    </div><!--modal-->                
+            <h4>Задачи</h4>
+
+        <div class="tasksList">
+            <table id="tasks" class="display" cellspacing="0" align="center" style="width:100%">
+                <thead>
+                    <tr><th>№</th><th>Создана</th><th>Создатель</th><th>Исполнитель</th><th>Заголовок</th><th>Описание</th></th><th>Edit / Delete</th></tr>
+                </thead>
+                <tfoot>
+                </tfoot>
+                
+            </table>
+        </div>
+    C
+</body>
+</html>

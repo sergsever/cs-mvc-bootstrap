@@ -1,0 +1,269 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>from-data</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="~/Content/Site.css" />
+    <link rel="stylesheet" href="Content/bootstrap-table.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css" />
+    
+    <script src="~/Scripts/bootstrap.js"></script>
+    <script type="text/javascript" src="~/Scripts/DataTables/jquery.dataTables.js"></script>
+    <script src="https://cdn.datatables.net/1.10.15/js/jquery.dataTables.min.js"></script>
+    <script src="~/Scripts/select2.js" type="text/javascript"></script>
+    <script src="~/Scripts/jquery.serialize-object.min.js" type="text/javascript"></script>
+
+
+    <script src="Scripts/bootstrap-table.js"></script>
+    <script>
+        var global = this;
+
+        var selectedUserID = 0;
+
+        usersTable = undefined;
+        select = undefined;
+        var editUserID = 0;
+
+        var setSelectedUser = function (id) {
+            var list = document.getElementById('users');
+            var userID = parseInt(id);
+            window.console.log('set selected user:' + userID);
+            selectedUserID = userID;
+
+        }
+        var FillUsers = function () {
+            console.log('fill users run');
+            if (select == undefined) {
+                var select = $('#UsersList').select2(
+                    {
+                        placeholder: '...выберете пользователя',
+                        minimumInputLength: 0,
+                        allowClear: true,
+                        "ajax": {
+                            width: 'resolve',
+                            url: 'http://localhost:50400/Tasks/GetUsers',
+                            type: 'GET',
+                            dataType: 'json',
+                            quietMillis: 50,
+                            data: function (params) {
+                                window.console.log('data:' + params);
+                                return {
+                                    q: params.term
+                                };
+                            },
+                            processResults: function (data) {
+                                window.console.log('processResults:' + JSON.stringify(data));
+                                return { results: data.results };
+                            },
+                            formatResult: function (item) {
+                                window.console.log('format results:' + item);
+                                return item.text;
+                            }
+                        }
+                    }).on('change', function (e) { console.log('select2:change:' + this.text); setSelectedUser(this.value) });
+            }
+            else {
+                windows.console.log('select2 reload');
+                select.select2().reload();
+            }
+            /*create table*/
+            window.console.log('usersTable:' + usersTable);
+            if (usersTable === undefined) {
+                window.console.log('usersTable is undefined');
+                 usersTable = $('#users').dataTable({
+                     "ajax": {
+                         "url": "/Users/GetUsers",
+                         "type": "GET",
+                         "datatype": "json"
+                     },
+                     "columnDefs":
+                     [{ targets: [0], visible: true },
+                     { targets: 1, visible: true },
+                     { targets: 2, visible: true },
+                     { targets: 3, visible: true },
+                     { targets: 4, visible: true },
+                     { targets: 5, visible: true }
+                     ],
+                     "aoColumns": [
+                         { "data": "UserID", "name": "UserID" },
+                         { "data": "Login", "name": "Login" },
+                         { "data": "FirstName", "name": "FirstName" },
+                         { "data": "LastName", "name": "LastName" },
+                         { "data": "MiddleName", "name": "MiddleName" },
+                         {
+                             "data": null,
+                             "mRender": function (data, type, row) {
+                                 var link = '<a href="#" onclick="editUser(' + data.UserID + ');">Edit</a> /' + '<a href="#" onclick="deleteUser(' + data.UserID + ');">Delete</a>';
+                                 return link;
+
+                             }
+                         }
+                     ]
+                 }); /*dataTable*/
+             } else{
+                window.console.log('users table reload:' + usersTable);
+                usersTable.api().ajax.reload();
+             }
+            $('#users').on('click', 'button', function (e) {
+                window.console.log('button.edit:');
+                e.preventDefault();
+                var data = usersTable.row($(this).parents('tr')).data();
+                window.console.log('a.editor_edit:' + data);
+            });/*edit*/
+            $('#UserForm').on('submit', function (e) {
+                e.preventDefault();
+                createUser();
+            })
+            var pageSize = 10;
+        }
+
+
+        
+        var createTask = function () {
+            window.console.log('create task:');
+            var userID = global.selectedUserID;
+            var param = { UserID: userID };
+            var sparam = JSON.stringify(param);
+            window.console.log('create task user id:' + userID);
+
+            $.ajax({
+                url: '/Tasks/CreateTask',
+                method: 'POST',
+                dataType: 'json',
+                data: sparam,
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('create task resp:' + resp);
+                    window.location.replace('/Tasks');
+                }
+            })
+        }
+
+        var createUser = function () {
+            window.console.log('create user run');
+            global.editUserID = 0;
+            $('#UserDiv').modal('show');
+            var data = $('#UserForm').serializeObject()
+            window.console.log('create user form:' + JSON.stringify(data));
+        }
+
+        var editUser = function (id) {
+            var userID = id;
+            global.editUserID = userID;
+            window.console.log('edit user:' + userID);
+            var url = '/Users/GetUser?userID=' + userID;
+            $.ajax({
+                url: url,
+                method: 'GET',
+                dataType: 'json',
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('get user resp:' + resp.LastName);
+                    var user = resp;
+                    $('#Login').val = user.Login;
+                    $('#UserDiv').bind('show', function () {
+                        //window.console.log('edit user bind form:')
+                        $('#LastName').val(user.LastName);
+                        $('#MiddleName').val(user.MiddleName);
+
+
+                    });
+                    $('#UserDiv').on('shown', function () {
+                        window.console.log('modal-content show:');
+                    })
+                    $('#Login').val(user.Login);
+                    $('#FirstName').val(user.FirstName);
+
+                    $('#LastName').val(user.LastName);
+                    $('#MiddleName').val(user.MiddleName);
+
+                    $('#UserDiv').modal('show');
+
+
+                }
+            })
+        }
+
+        var deleteUser = function (id) {
+            window.console.log('delete user:' + id);
+            var userID = id;
+            var url = '/Users/DeleteUser?userID=' + userID;
+            $.ajax({
+                url: url,
+                method: 'delete',
+                dataType: 'json',
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('delete user:' + resp);
+                    FillUsers();
+                }
+
+            })
+        }
+
+        var saveUser = function () {
+            var login = $('#Login').val();
+            var firstname = $('#FirstName').val();
+            var lastname = $('#LastName').val();
+            var middlename = $('#MiddleName').val();
+            var params = { userID: global.editUserID, login: login, firstname: firstname, lastname: lastname, middlename: middlename }
+            var sparams = JSON.stringify(params);
+            window.console.log('save user:' + login);
+            $.ajax({
+                url: '/Users/SaveUser',
+                method: 'POST',
+                dataType: 'json',
+                data: sparams,
+                contentType: 'application/json;charset:utf-8',
+                success: function (resp) {
+                    window.console.log('save user resp:' + resp);
+                    FillUsers();
+                    $('#UserDiv').modal('hide');
+                }
+            })
+        }
+            document.addEventListener('DOMContentLoaded', FillUsers); 
+    </script>
+    
+</head>
+<body>
+<div>
+        <h4>Пользователи</h4>
+        <div widtch="100%"><button onclick="createTask();" class="free-button">Создать новую задачу</button><select id="UsersList" class="form-control"></select></div>
+            <button onclick="createUser()">Создать нового пользователя</button>
+            <button onclick="window.location.replace('/Tasks')">Перейти к задачам</button>
+            
+</div>
+<div id="UserDiv" class="modal fade" role="dialog" data-toggle="modal" aria-labelledby="Пользователь">
+<div class="modal-dialog" role="document">
+<div class="modal-content">
+<div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-label="Close">x</button>
+    <h5 class="modal-title" >Пользователь</h5>
+</div><!--header-->
+<div class="modal-body">
+<div class="form-group">
+    <form id="UserForm" class="form-horizontal" name="User">
+        <div class="form-group row"><label class="control-label" for="Login">Логин:</label><input type="text" class="form-control-lg" id="Login" name="Login" /></div>
+        <div class="form-group row"><label class="control-label" for="FirstName">Имя:</label><input type="text" class="form-control-lg" id="FirstName" name="FirstName" placeholder="..Имя" required /></div>
+        <div class="form-group row"><label class="control-label" for="LastName">Фамилия:</label><input type="text" class="form-control-lg" id="LastName" name="LastName" /></div>
+        <div class="form-group row"><label class="control-label" for="MiddleName">Отчество:</label><input type="text" class="form-control-lg" id="MiddleName" name="MiddleName" /></div>
+    <button onclick="saveUser();">Сохранить</button>
+    </form>
+    </div><!--form-group-->
+</div><!--body-->
+</div><!--content-->
+</div><!--dialog-->
+</div><!--modal-->
+<div class="table-responsive">
+    <table id="users" class="table table-bordered bordered table-striped table-condensed datatable">
+        <thead>
+            <tr><th>Номер</th><th>Логин</th><th>Имя</th><th>Фамилия</th><th>Отчество</th><th>Edit / Delete</th></tr>
+            </thead>
+            <tfoot>
+            </tfoot>
+    </table>
+</div>
+</body>
+</html>
